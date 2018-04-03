@@ -3,6 +3,7 @@
     using System;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
+    using System.Diagnostics;
     using System.Reflection;
     using System.Reflection.Emit;
 
@@ -57,9 +58,9 @@
                 return first.Equals(second);
             }
 
-            if (ReferenceEquals(first, second) == false)
+            if (firstType == typeof(string))
             {
-                return false;
+                return string.CompareOrdinal((string)first, (string)second) == 0;
             }
 
             // Prevent circular references
@@ -71,14 +72,7 @@
             context.TraversedTypes.Add(firstType);
 
             // Get a comparer
-            //var comparer = GetComparer(firstType);
             var comparer = InternalGetComparer(firstType);
-
-
-            // Funkar
-            // return comparer();
-            //return comparer(first, second);
-
             return comparer(first, second, context);
         }
 
@@ -113,77 +107,93 @@
         // funkar
         //private static Func<bool> InternalGetComparer(Type firstType)
         //private static Func<object, object, bool> InternalGetComparer(Type firstType)
-        
-           
-        private static Func<object, object, CompareContext, bool> InternalGetComparer(Type firstType)
+
+
+        private static Func<object, object, CompareContext, bool> InternalGetComparer(Type compareType)
         {
             //var builder = new DynamicMethod("Serpent.DeepCompare.AreEqual_" + firstType.FullName, typeof(bool), new[] { typeof(object), typeof(object), typeof(CompareContext) });
 
             var builder = new DynamicMethod("CompareIt", typeof(bool), new[] { typeof(object), typeof(object), typeof(CompareContext) });
-            
+
+            var debugWriteLine = typeof(Debug).GetMethod("WriteLine", new[] { typeof(string) });
+
+            var ordinalStringComparer = typeof(string).GetMethod(nameof(string.CompareOrdinal), new[] { typeof(string), typeof(string) });
+
             // Funkar
             //var builder = new DynamicMethod("CompareIt", typeof(bool), new[] { typeof(object), typeof(object) });
             //var builder = new DynamicMethod("CompareIt", typeof(bool), Array.Empty<Type>());
 
-            var areEqualMethod = typeof(Compare).GetMethod(nameof(InternalAreEqual));
+            var areEqualMethod = typeof(Compare).GetMethod(nameof(InternalAreEqual), BindingFlags.NonPublic | BindingFlags.Static);
 
             var generator = builder.GetILGenerator();
 
-            ////var first = generator.DeclareLocal(firstType);
-            ////var second = generator.DeclareLocal(firstType);
+            var first = generator.DeclareLocal(compareType);
+            var second = generator.DeclareLocal(compareType);
 
-            ////generator.Emit(OpCodes.Ldarg_1);
-            ////generator.Emit(OpCodes.Castclass, firstType);
-            ////generator.Emit(OpCodes.Stloc, first);
+            generator.Emit(OpCodes.Ldarg_0);
+            generator.Emit(OpCodes.Castclass, compareType);
+            generator.Emit(OpCodes.Stloc, first);
 
-            ////generator.Emit(OpCodes.Ldarg_2);
-            ////generator.Emit(OpCodes.Castclass, firstType);
-            ////generator.Emit(OpCodes.Stloc, second);
+            generator.Emit(OpCodes.Ldarg_1);
+            generator.Emit(OpCodes.Castclass, compareType);
+            generator.Emit(OpCodes.Stloc, second);
 
-            ////var notEqualLabel = generator.DefineLabel();
+            //generator.Emit(OpCodes.Call, debugWriteLine);
 
-            ////foreach (var property in firstType.GetProperties())
-            ////{
-            ////    var getter = property.GetGetMethod();
+            var notEqualLabel = generator.DefineLabel();
 
-            ////    if (getter.IsPublic == false)
-            ////    {
-            ////        // Ignore non public properties
-            ////        continue;
-            ////    }
+            foreach (var property in compareType.GetProperties())
+            {
+                var getter = property.GetGetMethod();
 
-            ////    var areEqualLabel = generator.DefineLabel();
+                if (getter.IsPublic == false)
+                {
+                    // Ignore non public properties
+                    continue;
+                }
 
-            ////    // load arguments
-            ////    generator.Emit(OpCodes.Ldloc_S, first);
-            ////    generator.Emit(OpCodes.Call, getter);
+                var areEqualLabel = generator.DefineLabel();
 
-            ////    generator.Emit(OpCodes.Ldloc_S, second);
-            ////    generator.Emit(OpCodes.Call, getter);
+                // load arguments
+                generator.Emit(OpCodes.Ldloc_S, first);
+                generator.Emit(OpCodes.Callvirt, getter);
 
-            ////    if (!property.PropertyType.IsValueType)
-            ////    {
-            ////        generator.Emit(OpCodes.Ldarg_3); // context
-            ////        generator.Emit(OpCodes.Call, areEqualMethod);
+                generator.Emit(OpCodes.Ldloc_S, second);
+                generator.Emit(OpCodes.Callvirt, getter);
 
-            ////        generator.Emit(OpCodes.Brfalse, notEqualLabel);
-            ////        //generator.EmitCall();
-            ////    }
-            ////    else
-            ////    {
-            ////        generator.Emit(OpCodes.Beq, areEqualLabel);
-            ////    }
+                ////generator.EmitWriteLine(property.Name);
 
-            ////    generator.Emit(OpCodes.Br, notEqualLabel);
+                ////generator.Emit(OpCodes.Pop);
+                ////generator.Emit(OpCodes.Pop);
 
-            ////    generator.MarkLabel(areEqualLabel);
-            ////}
+                if (property.PropertyType == typeof(string))
+                {
+                    generator.Emit(OpCodes.Call, ordinalStringComparer);
 
-            ////// return true
-            ////generator.Emit(OpCodes.Ldc_I4_1);
-            ////generator.Emit(OpCodes.Ret);
+                    // if result == 0, jump to areEqualLabel
+                    generator.Emit(OpCodes.Brfalse, areEqualLabel);
+                }
+                else if (!property.PropertyType.IsValueType)
+                {
+                    generator.Emit(OpCodes.Ldarg_2); // context
+                    generator.Emit(OpCodes.Call, areEqualMethod);
+                    generator.Emit(OpCodes.Brfalse, notEqualLabel);
+                }
+                else
+                {
+                    generator.Emit(OpCodes.Beq, areEqualLabel);
+                }
 
-            ////generator.MarkLabel(notEqualLabel);
+                generator.Emit(OpCodes.Br, notEqualLabel);
+
+                generator.MarkLabel(areEqualLabel);
+            }
+
+            // return true
+            generator.Emit(OpCodes.Ldc_I4_1);
+            generator.Emit(OpCodes.Ret);
+
+            generator.MarkLabel(notEqualLabel);
 
             // return false
             generator.Emit(OpCodes.Ldc_I4_0);
@@ -194,7 +204,7 @@
 
             // funkar
             //return (Func<bool>)builder.CreateDelegate(typeof(Func<bool>));
-            
+
             return (Func<object, object, CompareContext, bool>)builder.CreateDelegate(typeof(Func<object, object, CompareContext, bool>));
         }
 
