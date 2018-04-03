@@ -73,5 +73,34 @@ namespace Serpent.DeepCompare.NetFramework.Tests
             var x = Compare.AreEqual(instance1, instance2);
             Assert.IsTrue(x);
         }
+
+        [TestMethod]
+        public void TestMethod3()
+        {
+            var instance1 = new TestClass
+            {
+                IntValue = 1,
+                StringValue = "123",
+                Klass2 = new TestClass2()
+                {
+                    IntValue2 = 2,
+                    StringValue2 = "2"
+                }
+            };
+
+            var instance2 = new TestClass
+            {
+                IntValue = 1,
+                StringValue = "123",
+                Klass2 = new TestClass2()
+                {
+                    IntValue2 = 2,
+                    StringValue2 = "3"
+                }
+            };
+
+            var x = Compare.AreEqual(instance1, instance2);
+            Assert.IsFalse(x);
+        }
     }
 }
