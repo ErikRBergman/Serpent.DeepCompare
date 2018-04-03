@@ -7,8 +7,8 @@
     <ProjectGuid>{591EA8A8-D684-4D11-B76B-CE60BD7F2648}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>Serpent.DeepCompare.NetFramework</RootNamespace>
-    <AssemblyName>Serpent.DeepCompare.NetFramework</AssemblyName>
+    <RootNamespace>Serpent.DeepCompare</RootNamespace>
+    <AssemblyName>Serpent.DeepCompare</AssemblyName>
     <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>

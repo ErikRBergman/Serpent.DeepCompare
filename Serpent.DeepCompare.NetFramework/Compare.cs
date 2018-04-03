@@ -1,17 +1,16 @@
-﻿namespace Serpent.DeepCompare.NetFramework
+﻿namespace Serpent.DeepCompare
 {
     using System;
     using System.Collections;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
-    using System.Diagnostics;
     using System.Linq;
     using System.Reflection;
     using System.Reflection.Emit;
 
     public static class Compare
     {
-        private static readonly ConcurrentDictionary<Type, Func<object, object, CompareContext, bool>> comparers =
+        private static readonly ConcurrentDictionary<Type, Func<object, object, CompareContext, bool>> Comparers =
             new ConcurrentDictionary<Type, Func<object, object, CompareContext, bool>>();
 
         public static bool AreEqual(object first, object second)
@@ -76,16 +75,13 @@
 
             ////        var firstIterator = (object[]) first
 
-
             ////    }
             ////    else
             ////    {
 
-
             ////    }
 
             ////}
-
             if (typeof(IEnumerable).IsAssignableFrom(firstType))
             {
                 var enumerator1 = ((IEnumerable)first).GetEnumerator();
@@ -119,7 +115,6 @@
                 return enumerator1Result == enumerator2Result;
             }
 
-
             // Get a comparer
             var comparer = GetComparer(firstType);
             return comparer(first, second, context);
@@ -127,7 +122,7 @@
 
         private static Func<object, object, CompareContext, bool> GetComparer(Type firstType)
         {
-            return comparers.GetOrAdd(firstType, InternalGetComparer);
+            return Comparers.GetOrAdd(firstType, InternalGetComparer);
         }
 
         private static Func<object, object, CompareContext, bool> InternalGetComparer(Type compareType)
@@ -228,9 +223,9 @@
             public static CompareContext Create()
             {
                 return new CompareContext
-                           {
-                               TraversedTypes = new HashSet<object>()
-                           };
+                {
+                    TraversedTypes = new HashSet<object>()
+                };
             }
         }
     }
