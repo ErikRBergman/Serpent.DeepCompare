@@ -1,9 +1,11 @@
 ﻿namespace Serpent.DeepCompare.NetFramework
 {
     using System;
+    using System.Collections;
     using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Diagnostics;
+    using System.Linq;
     using System.Reflection;
     using System.Reflection.Emit;
 
@@ -12,24 +14,6 @@
         private static readonly ConcurrentDictionary<Type, Func<object, object, CompareContext, bool>> comparers =
             new ConcurrentDictionary<Type, Func<object, object, CompareContext, bool>>();
 
-        ////public static bool AreEqual<T>(T first, T second)
-        ////{
-        ////    if (first == null)
-        ////    {
-        ////        return second == null;
-        ////    }
-
-        ////    if (second == null)
-        ////    {
-        ////        return false;
-        ////    }
-
-        ////    if (object.ReferenceEquals(first, second) == false)
-        ////    {
-        ////        return false;
-        ////    }
-
-        ////}
         public static bool AreEqual(object first, object second)
         {
             // return InternalAreEqual(first, second);
@@ -76,6 +60,66 @@
 
             context.TraversedTypes.Add(first);
 
+            ////if (firstType.IsArray)
+            ////{
+            ////    var arrayRank = firstType.GetArrayRank();
+
+            ////    if (arrayRank > 1)
+            ////    {
+            ////        throw new NotImplementedException("We do not support multi dimensional arrays, yet");
+            ////    }
+
+            ////    var elementType = firstType.GetElementType();
+
+            ////    if (elementType == typeof(object))
+            ////    {
+
+            ////        var firstIterator = (object[]) first
+
+
+            ////    }
+            ////    else
+            ////    {
+
+
+            ////    }
+
+            ////}
+
+            if (typeof(IEnumerable).IsAssignableFrom(firstType))
+            {
+                var enumerator1 = ((IEnumerable)first).GetEnumerator();
+                var enumerator2 = ((IEnumerable)second).GetEnumerator();
+
+                var enumerator1Result = enumerator1.MoveNext();
+                var enumerator2Result = enumerator2.MoveNext();
+
+                if (enumerator1Result != enumerator2Result)
+                {
+                    return false;
+                }
+
+                if (enumerator1Result == false)
+                {
+                    return true;
+                }
+
+                do
+                {
+                    if (InternalAreEqual(enumerator1.Current, enumerator2.Current, context) == false)
+                    {
+                        return false;
+                    }
+
+                    enumerator1Result = enumerator1.MoveNext();
+                    enumerator2Result = enumerator2.MoveNext();
+                }
+                while (enumerator2Result && enumerator1Result);
+
+                return enumerator1Result == enumerator2Result;
+            }
+
+
             // Get a comparer
             var comparer = GetComparer(firstType);
             return comparer(first, second, context);
@@ -91,7 +135,6 @@
             var builder = new DynamicMethod("Serpent.DeepCompare.AreEqual_" + compareType.FullName, typeof(bool), new[] { typeof(object), typeof(object), typeof(CompareContext) });
 
             ////var debugWriteLine = typeof(Debug).GetMethod("WriteLine", new[] { typeof(string) });
-
             var ordinalStringComparer = typeof(string).GetMethod(nameof(string.CompareOrdinal), new[] { typeof(string), typeof(string) });
 
             var areEqualMethod = typeof(Compare).GetMethod(nameof(InternalAreEqual), BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
@@ -112,7 +155,8 @@
             // generator.Emit(OpCodes.Call, debugWriteLine);
             var notEqualLabel = generator.DefineLabel();
 
-            foreach (var property in compareType.GetProperties())
+            //// TODO: Change compare order to first compare 32bit value types, then 64bit etc.. 
+            foreach (var property in compareType.GetProperties().OrderBy(p => p.Name))
             {
                 var getter = property.GetGetMethod();
 
